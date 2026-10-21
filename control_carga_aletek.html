@@ -269,9 +269,13 @@ records.forEach(r=>{
   }
   delete r.insumos;
 });
-const persist    = () => { try{ localStorage.setItem(LS_KEY, JSON.stringify(records)); }catch(e){} };
-const persistCat = () => { try{ localStorage.setItem(LS_CAT, JSON.stringify(catalog)); }catch(e){} };
-const persistReg = () => { try{ localStorage.setItem(LS_REG, JSON.stringify(insEntries)); }catch(e){} };
+/* si el navegador no deja guardar (almacenamiento lleno o bloqueado) hay que avisar: si no, los datos
+   se ven en pantalla pero se pierden al recargar. setTimeout porque toast se define más abajo. */
+const persistFail = e => { console.error(e); setTimeout(()=>toast(
+  "⚠ No se pudo guardar en este navegador (almacenamiento lleno o bloqueado). Haz un Respaldo JSON ahora.", true, 12000)); };
+const persist    = () => { try{ localStorage.setItem(LS_KEY, JSON.stringify(records)); }catch(e){ persistFail(e); } };
+const persistCat = () => { try{ localStorage.setItem(LS_CAT, JSON.stringify(catalog)); }catch(e){ persistFail(e); } };
+const persistReg = () => { try{ localStorage.setItem(LS_REG, JSON.stringify(insEntries)); }catch(e){ persistFail(e); } };
 persist(); persistCat(); persistReg();
 
 /* ===================== utilidades ===================== */
@@ -310,13 +314,13 @@ const sumEntries = entries => {
   return out;
 };
 let toastT;
-const toast = (msg, warn) => {
+const toast = (msg, warn, ms=3500) => {
   clearTimeout(toastT);
   const el = $("#toastEl");
   el.textContent = msg;
   el.style.background = warn ? "var(--warn)" : "var(--ok)";
   el.style.display = "block";
-  toastT = setTimeout(()=> el.style.display="none", 3500);
+  toastT = setTimeout(()=> el.style.display="none", ms);
 };
 
 /* ===================== parser: soporta varios documentos por Excel ===================== */
