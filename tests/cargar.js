@@ -7,7 +7,7 @@ function cargar(html = fs.readFileSync(path.join(__dirname, "..", "control_carga
   if(a < 0 || b < 0) throw new Error("no se encontró el bloque del parser en el HTML");
   const ctx = { XLSX, ...globales };
   vm.createContext(ctx);
-  vm.runInContext(html.slice(a, b) + "\nObject.assign(this, { parseWorkbook, today });", ctx);
+  vm.runInContext(html.slice(a, b) + "\nObject.assign(this, { parseWorkbook, today, parseNum });", ctx);
   return ctx;
 }
 

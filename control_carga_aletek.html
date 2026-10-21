@@ -291,6 +291,15 @@ const dimsVol = d => d ? d.l*d.a*d.h/1e6 : 0;
 const fVol = v => (v||v===0) ? Number(v).toFixed(4) : "";
 const fNum = v => (v||v===0) ? Number(v).toLocaleString("es-CL") : "";
 const f1 = v => (v||v===0) ? Number(v).toLocaleString("es-CL",{maximumFractionDigits:1}) : "0";
+/* número digitado a mano: acepta coma decimal ("8,5") y miles con punto ("1.234,5").
+   "" -> null; texto que no es número -> undefined */
+const parseNum = v => {
+  let s = String(v ?? "").replace(/\s/g,"");
+  if(s==="") return null;
+  if(s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
+};
 /* fecha local (no UTC): con toISOString, en Chile desde las ~21:00 salía el día siguiente */
 const today = () => { const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
@@ -813,7 +822,11 @@ document.querySelectorAll("[data-manual]").forEach(b=>b.addEventListener("click"
     if(inp.dataset.f==="fecha"){ d.fecha = inp.value; return; }
     const l = d.lines[+inp.dataset.li];
     const f = inp.dataset.f;
-    if(f==="qty"||f==="peso") l[f] = inp.value===""?null:Number(inp.value);
+    if(f==="qty"||f==="peso"||f==="cqty"){
+      const n = parseNum(inp.value);
+      if(n===undefined){ toast(`"${inp.value}" no es un número válido`, true); renderAllDrafts(); return; }
+      l[f] = n;
+    }
     else l[f] = inp.value;
     if(f==="cdims"||f==="cqty") recalcLine(l);
     renderAllDrafts();
