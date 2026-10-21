@@ -1,6 +1,6 @@
 const test = require("node:test"), assert = require("node:assert");
 const { cargar, libro, resumen } = require("./cargar");
-const parseWorkbook = cargar();
+const { parseWorkbook } = cargar();
 
 const ITEMS = [
   ["181-680B", "Cat 798 AC HAA Manifold Cover Group",        8, "48x39x33", 1],

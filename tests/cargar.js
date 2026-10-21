@@ -1,14 +1,14 @@
 // Carga las utilidades y parseWorkbook() directo desde el HTML, para probar el código real.
 const fs = require("fs"), path = require("path"), vm = require("vm"), XLSX = require("xlsx");
 
-function cargar(html = fs.readFileSync(path.join(__dirname, "..", "control_carga_aletek.html"), "utf8")){
+function cargar(html = fs.readFileSync(path.join(__dirname, "..", "control_carga_aletek.html"), "utf8"), globales = {}){
   const a = html.indexOf("/* ===================== utilidades");
   const b = html.indexOf("/* ===================== render de tablas");
   if(a < 0 || b < 0) throw new Error("no se encontró el bloque del parser en el HTML");
-  const ctx = { XLSX };
+  const ctx = { XLSX, ...globales };
   vm.createContext(ctx);
-  vm.runInContext(html.slice(a, b) + "\nthis.parseWorkbook = parseWorkbook;", ctx);
-  return ctx.parseWorkbook;
+  vm.runInContext(html.slice(a, b) + "\nObject.assign(this, { parseWorkbook, today });", ctx);
+  return ctx;
 }
 
 // arma un workbook en memoria y lo pasa por write/read, igual que un .xlsx subido

@@ -287,7 +287,9 @@ const dimsVol = d => d ? d.l*d.a*d.h/1e6 : 0;
 const fVol = v => (v||v===0) ? Number(v).toFixed(4) : "";
 const fNum = v => (v||v===0) ? Number(v).toLocaleString("es-CL") : "";
 const f1 = v => (v||v===0) ? Number(v).toLocaleString("es-CL",{maximumFractionDigits:1}) : "0";
-const today = () => new Date().toISOString().slice(0,10);
+/* fecha local (no UTC): con toISOString, en Chile desde las ~21:00 salía el día siguiente */
+const today = () => { const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const cleanKit = t => {
   if(!t) return "";
   const s = String(t).replace(/\s+/g," ").trim();
