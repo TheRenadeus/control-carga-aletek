@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de Carga · Aletek</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#F4F5F2; --ink:#171D22; --steel:#5B6670; --line:#D8DCD9;
+    --navy:#122B38; --amber:#E9A13B; --ambersoft:#FBF1DF; --ok:#2E7D5B; --warn:#B4552D;
+    --out:#3E7CB1; --outsoft:#E8F1F8; --oksoft:#E7F3EC;
+    --mono:ui-monospace,'Cascadia Mono','JetBrains Mono',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
+  header{background:var(--navy);padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px}
+  header h1{color:#F2F5F6;font-size:20px;font-weight:600;letter-spacing:.02em}
+  header h1 span{color:var(--amber)}
+  header p{color:#9FB2BC;font-size:12px;margin-top:2px}
+  nav{display:flex;gap:4px}
+  nav button{border:0;background:transparent;color:#9FB2BC;font-size:13px;font-weight:500;padding:7px 12px;cursor:pointer;border-radius:3px 3px 0 0}
+  nav button.active{background:var(--paper);color:var(--ink)}
+  main{max-width:1220px;margin:0 auto;padding:20px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:16px}
+  .dropzone{border:2px dashed var(--line);border-radius:6px;background:#fff;padding:30px;text-align:center;cursor:pointer;transition:border-color .15s}
+  .dropzone:hover,.dropzone.drag{border-color:var(--amber)}
+  .dropzone.out:hover,.dropzone.out.drag{border-color:var(--out)}
+  .dropzone strong{display:block;margin-top:6px}
+  .dropzone small{color:var(--steel);display:block;margin-top:4px}
+  .btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--ink);
+       font-size:13px;font-weight:500;padding:7px 12px;border-radius:3px;cursor:pointer}
+  .btn:hover{background:#FAFAF8}
+  .btn.primary{background:var(--amber);border-color:var(--amber);color:#2B1E05}
+  .btn.blue{background:var(--out);border-color:var(--out);color:#fff}
+  .btn.green{background:var(--ok);border-color:var(--ok);color:#fff}
+  .btn.dark{background:var(--navy);border-color:var(--navy);color:#F2F5F6}
+  .btn.danger{color:var(--warn)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.sm{padding:5px 9px;font-size:12px}
+  .btn.sm.on{background:var(--navy);border-color:var(--navy);color:#F2F5F6}
+  .periodnav{display:flex;align-items:stretch;gap:0;border:1px solid var(--line);border-radius:3px;overflow:hidden;background:#fff}
+  .periodnav button{border:0;background:#fff;cursor:pointer;padding:0 10px;font-size:13px;color:var(--steel)}
+  .periodnav button:hover{background:#FAFAF8;color:var(--ink)}
+  .perlabel{padding:6px 12px;text-align:center;min-width:210px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+  .perlabel b{display:block;font-size:13px}
+  .perlabel small{color:var(--steel);font-family:var(--mono);font-size:11px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  /* la tabla de insumos crece en columnas a medida que se agregan insumos al catálogo;
+     debe poder crecer más allá del ancho de la tarjeta y scrollear en vez de apretar
+     columnas como FECHA/GD hasta hacerlas ilegibles */
+  #insTable{width:max-content;min-width:100%}
+  #insTable td.fecha-col,#insTable td.gd-col{white-space:nowrap}
+  th{background:var(--navy);color:#E8EDF0;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+     font-weight:600;text-align:left;padding:8px;white-space:nowrap}
+  th.r,td.r{text-align:right}
+  th.g{background:var(--ok)}
+  td{padding:6px 8px;border-top:1px dashed var(--line);vertical-align:middle}
+  tr.gstart td{border-top:2px solid var(--line)}
+  tr.shared{background:var(--ambersoft)}
+  tr.totrow td{background:var(--oksoft);border-top:2px solid var(--ok);font-weight:700;font-family:var(--mono)}
+  .tag{display:inline-block;background:var(--amber);color:#3A2A08;font-size:11px;font-weight:600;
+       padding:2px 6px;border-radius:2px;white-space:nowrap}
+  .cajanum{color:var(--steel);font-size:11px;font-family:var(--mono);white-space:nowrap}
+  .mono{font-family:var(--mono)}
+  .muted{color:var(--steel)}
+  td input{font:inherit;padding:3px 5px;border:1px solid var(--line);border-radius:2px;width:100%}
+  td input.num{text-align:right;font-family:var(--mono)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--line)}
+  .stat{background:#fff;border-left:2px solid var(--amber);padding:10px 14px}
+  .stat.out{border-left-color:var(--out)}
+  .stat.ins{border-left-color:var(--ok)}
+  .stat label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--steel)}
+  .stat b{font-family:var(--mono);font-size:19px;font-weight:600}
+  .stat small{color:var(--steel);font-weight:400;font-size:11px;margin-left:3px}
+  .barhead{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  .warnbox{background:#FDF3EC;color:var(--warn);font-size:12px;padding:8px 16px}
+  .toast{position:fixed;bottom:16px;right:16px;color:#fff;font-size:13px;font-weight:500;
+         padding:10px 16px;border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:50;display:none}
+  .empty{text-align:center;padding:48px 16px;color:var(--steel)}
+  .empty b{color:var(--ink)}
+  input[type=date],input.doc,input.ref,input.cat{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:#fff}
+  input.doc{font-family:var(--mono);font-weight:600;min-width:150px}
+  input.doc.missing{border-color:var(--warn);background:#FDF3EC}
+  input.ref{min-width:170px}
+  .catbody{padding:14px 16px}
+  .catlist{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .catitem{display:inline-flex;align-items:center;gap:8px;background:var(--oksoft);color:var(--ok);
+           font-size:13px;font-weight:500;padding:5px 8px 5px 10px;border-radius:3px}
+  .catitem small{color:var(--steel);font-weight:400}
+  .catitem button{border:0;background:none;color:var(--warn);cursor:pointer;font-size:13px;line-height:1;padding:2px}
+  .catadd{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+  .rowdel{border:0;background:none;color:var(--warn);cursor:pointer;font-size:15px;line-height:1;padding:2px 6px;border-radius:2px}
+  .rowdel:hover{background:#FDECEC}
+  .chev{border:0;background:none;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:8px;font-weight:600;flex-wrap:wrap;text-align:left}
+  .pill{background:var(--paper);color:var(--steel);font-size:12px;padding:2px 7px;border-radius:2px}
+  .pill.ref{background:var(--outsoft);color:var(--out)}
+  .flexg{display:flex;align-items:center;gap:14px;font-family:var(--mono);font-size:13px;flex-wrap:wrap}
+  .tools{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px;justify-content:space-between}
+  .tools label,.fld label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--steel);margin-bottom:4px}
+  .scroll{overflow-x:auto}
+  .secttl{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--steel);margin:22px 0 10px;font-weight:600}
+  footer{max-width:1220px;margin:0 auto;padding:0 20px 24px;color:var(--steel);font-size:12px}
+  @media (max-width:640px){ header{align-items:flex-start;flex-direction:column} }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1><span>▣</span> Control de Carga · Aletek</h1>
+    <p>Ingresos por packing list, despachos por GD, insumos en su propio registro — volumen automático.</p>
+  </div>
+  <nav id="nav">
+    <button data-tab="ingresos" class="active">Ingresos</button>
+    <button data-tab="despachos">Despachos</button>
+    <button data-tab="insumos">Insumos</button>
+    <button data-tab="control">Control de volumen</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ================= INGRESOS ================= -->
+  <section id="tab-ingresos">
+    <div class="dropzone" id="dz-ing">
+      ⬆
+      <strong>Arrastra aquí los packing list de INGRESO (.xlsx) o haz clic</strong>
+      <small>El número de packing list se lee solo del archivo. Para PDF usa “Crear ingreso manual”.</small>
+      <input type="file" id="file-ing" accept=".xlsx,.xls" multiple hidden>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn" data-manual="ingreso">＋ Crear ingreso manual (para PDF)</button>
+    </div>
+    <div id="drafts-ingreso"></div>
+    <div class="secttl">Ingresos guardados</div>
+    <div id="recs-ingreso"></div>
+  </section>
+
+  <!-- ================= DESPACHOS ================= -->
+  <section id="tab-despachos" hidden>
+    <div class="dropzone out" id="dz-des">
+      ⬇
+      <strong>Arrastra aquí el Excel del DESPACHO (.xlsx) o haz clic</strong>
+      <small>Si el archivo trae varias GD (títulos “GD 541”, “GD 542”…), se separa un borrador por cada una.
+      Digita el N° de GD si falta. Los insumos se registran en su propia pestaña. Para PDF usa “Crear despacho manual”.</small>
+      <input type="file" id="file-des" accept=".xlsx,.xls" multiple hidden>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn" data-manual="despacho">＋ Crear despacho manual (para PDF)</button>
+    </div>
+    <div id="drafts-despacho"></div>
+    <div class="secttl">Despachos guardados</div>
+    <div id="recs-despacho"></div>
+  </section>
+
+  <!-- ================= INSUMOS ================= -->
+  <section id="tab-insumos" hidden>
+    <div class="card">
+      <div class="barhead" style="background:var(--oksoft)">
+        <b style="color:var(--ok)">Catálogo de insumos</b>
+        <span class="muted" style="font-size:12px">Define aquí qué insumos existen; cada uno es una columna del registro.</span>
+      </div>
+      <div class="catbody">
+        <div class="catlist" id="catList"></div>
+        <div class="catadd">
+          <div class="fld"><label>Nombre del insumo</label>
+            <input class="cat" id="catNombre" placeholder="Ej: Film stretch"></div>
+          <div class="fld"><label>Unidad</label>
+            <input class="cat" id="catUnidad" placeholder="m / un / kg / rollo" style="width:110px"></div>
+          <button class="btn green" id="catAdd">＋ Agregar insumo</button>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:10px">
+          Al quitar un insumo, su columna desaparece del registro, totales y exportaciones; los valores antiguos se
+          conservan ocultos y reaparecen si vuelves a crear un insumo con el mismo nombre.
+        </p>
+      </div>
+    </div>
+
+    <div class="tools">
+      <b>Registro de consumo por GD</b>
+      <button class="btn green" id="insAdd">＋ Agregar registro</button>
+    </div>
+    <div class="card scroll"><table id="insTable"></table></div>
+  </section>
+
+  <!-- ================= CONTROL ================= -->
+  <section id="tab-control" hidden>
+    <div class="tools">
+      <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <label>Período de cierre</label>
+          <div class="periodnav">
+            <button id="perPrev" title="Cierre anterior">◀</button>
+            <div class="perlabel"><b id="perName">—</b><small id="perDates"></small></div>
+            <button id="perNext" title="Cierre siguiente">▶</button>
+          </div>
+        </div>
+        <div><label>Corte desde</label><input type="date" id="rFrom"></div>
+        <div><label>hasta</label><input type="date" id="rTo"></div>
+        <div><label>Día de corte</label><input type="number" id="cutDay" min="1" max="28" class="cat" style="width:72px" title="Día del mes en que termina cada cierre"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:1px">
+          <button class="btn sm" data-preset="cierre">Cierre actual</button>
+          <button class="btn sm" data-preset="mes">Este mes</button>
+          <button class="btn sm" data-preset="mesant">Mes anterior</button>
+          <button class="btn sm" data-preset="todo">Todo</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn dark" id="btnExport">⬇ Exportar a Excel</button>
+        <button class="btn" id="btnBackup">Respaldo JSON</button>
+        <button class="btn" id="btnRestore">Restaurar respaldo</button>
+        <input type="file" id="restoreInput" accept=".json" hidden>
+      </div>
+    </div>
+
+    <div class="secttl" style="margin-top:0">Ingresos del período</div>
+    <div class="card"><div class="stats" id="stats-ing"></div></div>
+    <div class="secttl">Despachos del período</div>
+    <div class="card"><div class="stats" id="stats-des"></div></div>
+    <div class="secttl">Insumos del período</div>
+    <div class="card"><div class="stats" id="stats-ins"></div></div>
+
+    <div class="secttl">Detalle por documento</div>
+    <div class="card scroll"><table id="controlTable"></table></div>
+  </section>
+</main>
+
+<footer>Los datos se guardan en este navegador (localStorage). Usa “Respaldo JSON” periódicamente o para moverlos a otro equipo.</footer>
+<div class="toast" id="toastEl"></div>
+
+<script>
+/* ===================== estado y persistencia ===================== */
+const LS_KEY = "aletek-carga-v1";
+const LS_OLD = "aletek-ing-v1";
+const LS_CAT = "aletek-insumos-v1";
+const LS_REG = "aletek-insreg-v1";
+let records = [];
+let drafts  = [];
+let expanded = {};
+let catalog = [];
+let insEntries = [];   // [{id, fecha, gd, values:{catId:num}}]
+
+const slug = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
+                   .replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+const uid = () => Date.now()+"-"+Math.random().toString(36).slice(2,7);
+const DEFAULT_CAT = [
+  { id:"zm", nombre:"Zuncho metálico", unidad:"m" },
+  { id:"zp", nombre:"Zuncho plástico", unidad:"m" },
+  { id:"eg", nombre:"Etiqueta grande", unidad:"un" },
+  { id:"ec", nombre:"Etiqueta chica",  unidad:"un" },
+];
+try { records = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch(e){ records = []; }
+try { catalog = JSON.parse(localStorage.getItem(LS_CAT) || "null") || DEFAULT_CAT.slice(); } catch(e){ catalog = DEFAULT_CAT.slice(); }
+try { insEntries = JSON.parse(localStorage.getItem(LS_REG) || "[]"); } catch(e){ insEntries = []; }
+/* migración desde versión solo-ingresos */
+try {
+  const old = JSON.parse(localStorage.getItem(LS_OLD) || "[]");
+  if(Array.isArray(old) && old.length){
+    const ids = new Set(records.map(r=>r.id));
+    old.forEach(r=>{ if(r && r.lines && !ids.has(r.id))
+      records.push({...r, tipo:"ingreso", doc:r.doc || r.plLabel || "", ref:""}); });
+    localStorage.removeItem(LS_OLD);
+  }
+} catch(e){}
+/* migración: insumos que antes vivían dentro del despacho pasan al registro propio */
+records.forEach(r=>{
+  if(r.tipo==="despacho" && r.insumos && Object.values(r.insumos).some(v=>v!=null && v!=="" && Number(v)!==0)){
+    insEntries.push({ id:uid(), fecha:r.fecha, gd:r.doc, values:{...r.insumos} });
+  }
+  delete r.insumos;
+});
+const persist    = () => { try{ localStorage.setItem(LS_KEY, JSON.stringify(records)); }catch(e){} };
+const persistCat = () => { try{ localStorage.setItem(LS_CAT, JSON.stringify(catalog)); }catch(e){} };
+const persistReg = () => { try{ localStorage.setItem(LS_REG, JSON.stringify(insEntries)); }catch(e){} };
+persist(); persistCat(); persistReg();
+
+/* ===================== utilidades ===================== */
+const CODE_RE = /^\d{3}-\d{3}[A-Z]?$/;
+const $ = (s, el=document) => el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const parseDims = t => {
+  if(!t) return null;
+  const m = String(t).replace(/\s/g,"").match(/^(\d+(?:\.\d+)?)[xX](\d+(?:\.\d+)?)[xX](\d+(?:\.\d+)?)$/);
+  return m ? {l:+m[1], a:+m[2], h:+m[3]} : null;
+};
+const dimsVol = d => d ? d.l*d.a*d.h/1e6 : 0;
+const fVol = v => (v||v===0) ? Number(v).toFixed(4) : "";
+const fNum = v => (v||v===0) ? Number(v).toLocaleString("es-CL") : "";
+const f1 = v => (v||v===0) ? Number(v).toLocaleString("es-CL",{maximumFractionDigits:1}) : "0";
+const today = () => new Date().toISOString().slice(0,10);
+const cleanKit = t => {
+  if(!t) return "";
+  const s = String(t).replace(/\s+/g," ").trim();
+  const c = s.match(/\d{3}-\d{3}[A-Z]?/), q = s.match(/QTY\s*x\s*(\d+)/i);
+  return c ? c[0] + (q ? ` ×${q[1]}` : "") : s;
+};
+const sumRec = lines => ({
+  piezas: lines.reduce((s,l)=>s+(l.qty||0),0),
+  peso:   lines.reduce((s,l)=>s+(l.peso||0),0),
+  cajas:  lines.reduce((s,l)=>s+(l.cqty||0),0),
+  volTotal:  lines.reduce((s,l)=>s+(l.volTotal||0),0),
+  volPallets:lines.reduce((s,l)=>s+(l.volPallet||0),0),
+  pallets: new Set(lines.filter(l=>l.palletId).map(l=>l.palletId)).size,
+});
+const sumEntries = entries => {
+  const out = {};
+  catalog.forEach(c => out[c.id] = entries.reduce((a,en)=>a+(Number(en.values?.[c.id])||0),0));
+  return out;
+};
+let toastT;
+const toast = (msg, warn) => {
+  clearTimeout(toastT);
+  const el = $("#toastEl");
+  el.textContent = msg;
+  el.style.background = warn ? "var(--warn)" : "var(--ok)";
+  el.style.display = "block";
+  toastT = setTimeout(()=> el.style.display="none", 3500);
+};
+
+/* ===================== parser: soporta varios documentos por Excel ===================== */
+function parseWorkbook(wb, fileName, tipo){
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  const docs = [];
+  let cur = null;
+  let colMap=null, curPO="", curKit="", cartonSeq=0, palletSeq=0, curPallet=null, curCajon=null;
+  const newDoc = doc => {
+    cur = { tipo, doc: doc||"", ref:"", fecha:today(), fileName, lines:[], warnings:[] };
+    docs.push(cur);
+    curPO=""; curKit=""; cartonSeq=0; palletSeq=0; curPallet=null; curCajon=null;
+  };
+  const findCol=(hdr,...keys)=>hdr.findIndex(c=>c&&keys.some(k=>String(c).toLowerCase().includes(k)));
+
+  for(const row of rows){
+    if(!row || row.every(c=>c===null||c==="")) continue;
+    const first = row[0]!=null ? String(row[0]).trim() : "";
+
+    let m = first.match(/packing\s*list\s+(.+)/i);
+    if(m){ newDoc(m[1].trim()); continue; }
+    m = first.match(/^gd[\s:#]+(.+)/i);
+    if(m){ newDoc(m[1].trim()); continue; }
+
+    const joined = row.map(c=>c?String(c).toLowerCase():"").join("|");
+    if(joined.includes("product") && joined.includes("description")){
+      if(!cur) newDoc("");
+      colMap = {
+        po:findCol(row,"po"), kit:findCol(row,"kit"), code:findCol(row,"product"),
+        desc:findCol(row,"description"), qty:findCol(row,"qty (pcs","total qty"),
+        nw:findCol(row,"n.w"), cdims:findCol(row,"carton dim"), cqty:findCol(row,"carton qty"),
+        cajon:findCol(row,"cajon","cajón"),
+        pdims:findCol(row,"pallet dim"), pw:findCol(row,"pallet weight"),
+      };
+      curPO=""; curKit=""; continue;
+    }
+    if(!colMap || !cur) continue;
+    const get = k => colMap[k]>=0 ? row[colMap[k]] : null;
+    const code = get("code")!=null ? String(get("code")).trim() : "";
+    if(!CODE_RE.test(code)) continue;
+
+    if(get("po")!=null && String(get("po")).trim()!=="") curPO = String(get("po")).replace(/\s+/g," ").trim();
+    if(colMap.kit>=0 && get("kit")!=null && String(get("kit")).trim()!=="") curKit = cleanKit(get("kit"));
+    if(colMap.cajon>=0 && get("cajon")!=null && String(get("cajon")).trim()!=="") curCajon = String(get("cajon")).trim();
+
+    const cdims = get("cdims") ? String(get("cdims")).trim() : "";
+    const cqtyRaw = (get("cqty")!=null && get("cqty")!=="") ? Number(get("cqty")) : null;
+    const shared = !cdims && cqtyRaw==null;
+    if(!shared) cartonSeq++;
+    if(shared && cur.lines.length===0) cur.warnings.push(`${code}: viene sin caja propia pero no hay línea anterior`);
+
+    const pdims = get("pdims") ? String(get("pdims")).trim() : "";
+    if(pdims){
+      palletSeq++;
+      curPallet = { id:palletSeq, dims:pdims, vol:dimsVol(parseDims(pdims)),
+                    peso:get("pw")!=null?Number(get("pw")):null };
+      if(!parseDims(pdims)) cur.warnings.push(`Pallet "${pdims}" no se pudo interpretar`);
+    }
+    const d = parseDims(cdims);
+    cur.lines.push({
+      po:curPO, kit:curKit, code, desc:get("desc")?String(get("desc")).trim():"",
+      qty:get("qty")!=null?Number(get("qty")):null,
+      peso:(get("nw")!=null&&get("nw")!=="")?Number(get("nw")):null,
+      cdims, cqty:shared?null:cqtyRaw, shared, cartonGroup:cartonSeq,
+      cajon: pdims ? curCajon : null,
+      volCaja:shared?null:dimsVol(d),
+      volTotal:(shared||cqtyRaw==null)?0:dimsVol(d)*cqtyRaw,
+      palletId:pdims?curPallet.id:null, palletDims:pdims||"",
+      palletPeso:pdims?curPallet.peso:null, volPallet:pdims?curPallet.vol:0,
+    });
+  }
+  return docs.filter(d=>d.lines.length);
+}
+function recalcLine(l){
+  const d = parseDims(l.cdims);
+  const q = (l.cqty===""||l.cqty==null) ? null : Number(l.cqty);
+  l.cqty = q;
+  l.shared = !l.cdims && q==null;
+  l.volCaja = l.shared ? null : dimsVol(d);
+  l.volTotal = (l.shared || q==null) ? 0 : dimsVol(d)*q;
+}
+
+/* ===================== render de tablas de carga ===================== */
+function lineRowsHTML(lines, editable, di){
+  let last=null, html="";
+  lines.forEach((l,li)=>{
+    const gstart = l.cartonGroup!==last; last = l.cartonGroup;
+    const cls = `${l.shared?"shared":""} ${gstart?"gstart":""}`;
+    const cell = (field,val,num,w) => editable
+      ? `<input class="${num?'num ':''}mono" style="width:${w}" data-di="${di}" data-li="${li}" data-f="${field}" value="${esc(val??"")}">`
+      : `<span class="mono">${esc(val??"")}</span>`;
+    const palletTxt = l.palletId
+      ? `#${l.palletId}${l.cajon?` · cajón ${esc(l.cajon)}`:""} · ${esc(l.palletDims)} · ${fVol(l.volPallet)} m³` : "";
+    html += `<tr class="${cls}">
+      <td>${l.shared ? '<span class="tag">↳ misma caja</span>' : `<span class="cajanum">caja ${l.cartonGroup}</span>`}</td>
+      <td>${cell("code", l.code, false, "86px")}</td>
+      <td style="max-width:250px">${editable
+        ? `<input data-di="${di}" data-li="${li}" data-f="desc" value="${esc(l.desc)}">`
+        : `<span title="${esc(l.desc)}">${esc(l.desc)}</span>`}</td>
+      <td class="muted" style="font-size:12px;white-space:nowrap">${esc(l.po)}</td>
+      <td class="muted mono" style="font-size:12px;white-space:nowrap">${esc(l.kit)}</td>
+      <td class="r">${cell("qty", l.qty, true, "56px")}</td>
+      <td class="r">${cell("peso", l.peso, true, "64px")}</td>
+      <td>${cell("cdims", l.cdims, false, "92px")}</td>
+      <td class="r">${cell("cqty", l.cqty, true, "50px")}</td>
+      <td class="r mono">${l.volTotal ? fVol(l.volTotal) : ""}</td>
+      <td class="mono" style="font-size:12px;white-space:nowrap">${palletTxt}</td>
+      ${editable ? `<td><button class="rowdel" data-di="${di}" data-li="${li}" title="Quitar línea">✕</button></td>` : ""}
+    </tr>`;
+  });
+  return html;
+}
+const theadHTML = editable => `<thead><tr>
+  <th>Caja</th><th>Código</th><th>Descripción</th><th>PO #</th><th>Kit</th>
+  <th class="r">QTY</th><th class="r">KG</th><th>Dim. caja</th><th class="r">Cajas</th>
+  <th class="r">Vol (m³)</th><th>Pallet / Cajón</th>${editable?"<th></th>":""}
+</tr></thead>`;
+const statsHTML = (s, out) => `
+  <div class="stat ${out?'out':''}"><label>Piezas</label><b>${fNum(s.piezas)}<small>pcs</small></b></div>
+  <div class="stat ${out?'out':''}"><label>Peso</label><b>${fNum(s.peso)}<small>kg</small></b></div>
+  <div class="stat ${out?'out':''}"><label>Cajas</label><b>${fNum(s.cajas)}<small>un</small></b></div>
+  <div class="stat ${out?'out':''}"><label>Vol. carga</label><b>${fVol(s.volTotal)}<small>m³</small></b></div>
+  <div class="stat ${out?'out':''}"><label>Vol. pallets</label><b>${fVol(s.volPallets)}<small>m³</small></b></div>`;
+
+/* ===================== catálogo de insumos ===================== */
+function renderCatalog(){
+  $("#catList").innerHTML = catalog.length
+    ? catalog.map(c=>`<span class="catitem">${esc(c.nombre)} <small>(${esc(c.unidad)})</small>
+        <button data-cat="${c.id}" title="Quitar del catálogo">✕</button></span>`).join("")
+    : `<span class="muted" style="font-size:13px">Catálogo vacío — agrega tu primer insumo abajo.</span>`;
+}
+$("#catAdd").addEventListener("click", ()=>{
+  const nombre = $("#catNombre").value.trim();
+  const unidad = $("#catUnidad").value.trim() || "un";
+  if(!nombre){ toast("Escribe el nombre del insumo", true); return; }
+  let id = slug(nombre) || "ins-"+Date.now();
+  if(catalog.some(c=>c.id===id || c.nombre.toLowerCase()===nombre.toLowerCase())){
+    toast("Ese insumo ya existe en el catálogo", true); return;
+  }
+  catalog.push({ id, nombre, unidad });
+  persistCat();
+  $("#catNombre").value=""; $("#catUnidad").value="";
+  renderCatalog(); renderInsumos();
+  toast(`Insumo "${nombre}" agregado`);
+});
+$("#catList").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-cat]"); if(!b) return;
+  const c = catalog.find(x=>x.id===b.dataset.cat); if(!c) return;
+  if(!confirm(`¿Quitar "${c.nombre}" del catálogo?\nSu columna desaparecerá del registro, totales y exportaciones (los valores antiguos se conservan ocultos).`)) return;
+  catalog = catalog.filter(x=>x.id!==c.id);
+  persistCat();
+  renderCatalog(); renderInsumos();
+  if(!$("#tab-control").hidden) renderControl();
+  toast(`Insumo "${c.nombre}" quitado del catálogo`);
+});
+
+/* ===================== registro de insumos ===================== */
+function renderInsumos(){
+  const head = `<thead><tr>
+    <th class="gd-col">Fecha</th><th class="gd-col">GD</th>
+    ${catalog.map(c=>`<th class="r g">${esc(c.nombre)} (${esc(c.unidad)})</th>`).join("")}
+    <th></th></tr></thead>`;
+  const sorted = insEntries.map((en,i)=>({en,i}))
+    .sort((a,b)=>(b.en.fecha||"").localeCompare(a.en.fecha||""));
+  const body = sorted.map(({en})=>`<tr>
+    <td class="fecha-col" style="width:140px"><input type="date" data-ins="${en.id}" data-f="fecha" value="${esc(en.fecha)}"></td>
+    <td class="gd-col" style="width:150px"><input class="mono" data-ins="${en.id}" data-f="gd" value="${esc(en.gd)}" placeholder="542 o 528/529/530"></td>
+    ${catalog.map(c=>`<td class="r" style="min-width:110px">
+      <input class="num" type="number" step="any" min="0" data-ins="${en.id}" data-f="v:${c.id}" value="${en.values?.[c.id] ?? ""}"></td>`).join("")}
+    <td style="width:40px"><button class="rowdel" data-insdel="${en.id}" title="Eliminar registro">✕</button></td>
+  </tr>`).join("");
+  const tot = sumEntries(insEntries);
+  const totRow = insEntries.length ? `<tr class="totrow">
+    <td colspan="2">TOTAL REGISTRADO</td>
+    ${catalog.map(c=>`<td class="r">${f1(tot[c.id])}</td>`).join("")}
+    <td></td></tr>` : "";
+  $("#insTable").innerHTML = head + `<tbody>${
+    body || `<tr><td colspan="${catalog.length+3}" style="text-align:center;padding:26px" class="muted">
+      Sin registros aún — presiona “＋ Agregar registro” para anotar el consumo de una GD.</td></tr>`
+  }${totRow}</tbody>`;
+}
+$("#insAdd").addEventListener("click", ()=>{
+  insEntries.push({ id:uid(), fecha:today(), gd:"", values:{} });
+  persistReg(); renderInsumos();
+});
+$("#insTable").addEventListener("change", e=>{
+  const inp = e.target; if(!inp.dataset.ins) return;
+  const en = insEntries.find(x=>x.id===inp.dataset.ins); if(!en) return;
+  const f = inp.dataset.f;
+  if(f==="fecha") en.fecha = inp.value;
+  else if(f==="gd") en.gd = inp.value;
+  else if(f.startsWith("v:")){
+    if(!en.values) en.values = {};
+    en.values[f.slice(2)] = inp.value===""?null:Number(inp.value);
+  }
+  persistReg(); renderInsumos();
+});
+$("#insTable").addEventListener("click", e=>{
+  const b = e.target.closest("button[data-insdel]"); if(!b) return;
+  const en = insEntries.find(x=>x.id===b.dataset.insdel); if(!en) return;
+  if(!confirm(`¿Eliminar el registro de insumos${en.gd?` de GD ${en.gd}`:""}?`)) return;
+  insEntries = insEntries.filter(x=>x.id!==en.id);
+  persistReg(); renderInsumos();
+  toast("Registro de insumos eliminado");
+});
+
+/* ===================== borradores ===================== */
+function renderDrafts(tipo){
+  const el = $("#drafts-"+tipo);
+  const items = drafts.map((d,di)=>({d,di})).filter(x=>x.d.tipo===tipo);
+  el.innerHTML = items.map(({d,di})=>{
+    const s = sumRec(d.lines);
+    const esIng = tipo==="ingreso";
+    const docLbl = esIng ? "N° Packing List" : "N° GD (obligatorio)";
+    const docMissing = !esIng && !d.doc.trim();
+    return `<div class="card" style="margin-top:18px">
+      <div class="barhead">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end">
+          <div class="fld"><label>${docLbl}</label>
+            <input class="doc ${docMissing?'missing':''}" data-di="${di}" data-f="doc" value="${esc(d.doc)}" placeholder="${esIng?'66056':'547'}"></div>
+          <div class="fld"><label>Doc. asociado${esIng?'s':''} (opcional)</label>
+            <input class="ref" data-di="${di}" data-f="ref" value="${esc(d.ref)}" placeholder="${esIng?'uno o varios: 4587, 4590':'factura / referencia'}"></div>
+          <div class="fld"><label>Fecha</label>
+            <input type="date" data-di="${di}" data-f="fecha" value="${esc(d.fecha)}"></div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn" data-act="addline" data-di="${di}">＋ Fila manual</button>
+          <button class="btn ${esIng?'primary':'blue'}" data-act="save" data-di="${di}" ${d.lines.length && !docMissing ? "":"disabled"}>💾 Guardar ${esIng?'ingreso':'despacho'}</button>
+          <button class="btn danger" data-act="discard" data-di="${di}" title="Descartar borrador">🗑</button>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;padding:0 16px 8px">Archivo: ${esc(d.fileName)} · ${d.lines.length} líneas · ${s.pallets} pallet(s)${docMissing?' — <b style="color:var(--warn)">falta el N° de GD para poder guardar</b>':''}</div>
+      ${d.warnings.length?`<div class="warnbox">⚠ ${d.warnings.map(esc).join("<br>⚠ ")}</div>`:""}
+      <div class="scroll"><table>${theadHTML(true)}<tbody>${lineRowsHTML(d.lines,true,di)}</tbody></table></div>
+      <div class="stats">${statsHTML(s, !esIng)}</div>
+    </div>`;
+  }).join("");
+}
+const renderAllDrafts = () => { renderDrafts("ingreso"); renderDrafts("despacho"); };
+
+/* ===================== registros guardados ===================== */
+function renderRecs(tipo){
+  const el = $("#recs-"+tipo);
+  const list = records.filter(r=>r.tipo===tipo).sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+  if(!list.length){
+    el.innerHTML = `<div class="card"><div class="empty"><b>Sin ${tipo==="ingreso"?"ingresos":"despachos"} guardados aún</b><br>
+      Importa un archivo arriba y guárdalo para verlo aquí.</div></div>`;
+    return;
+  }
+  el.innerHTML = list.map(r=>{
+    const s = sumRec(r.lines), open = !!expanded[r.id];
+    const pre = r.tipo==="ingreso" ? "PL" : "GD";
+    return `<div class="card">
+      <div class="barhead">
+        <button class="chev" data-act="toggle" data-id="${r.id}">
+          ${open?"▾":"▸"} <span class="mono">${pre} ${esc(r.doc)}</span>
+          <span class="pill">${esc(r.fecha)}</span>
+          ${r.ref?`<span class="pill ref">ref: ${esc(r.ref)}</span>`:""}
+        </button>
+        <div class="flexg">
+          <span>${fNum(s.piezas)} pcs</span><span>${fNum(s.cajas)} cajas</span>
+          <span>${s.pallets} pallets</span><b>${fVol(s.volTotal)} m³</b>
+          <button class="rowdel" data-act="delrec" data-id="${r.id}" title="Eliminar">🗑</button>
+        </div>
+      </div>
+      ${open?`<div class="barhead" style="border-top:1px solid var(--line);background:#FAFAF8;justify-content:flex-start">
+          <div class="fld"><label>Doc. asociado${r.tipo==="ingreso"?"s":""} (editable)</label>
+            <input class="ref" data-scope="recref" data-id="${r.id}" value="${esc(r.ref||"")}" placeholder="uno o varios: 4587, 4590"></div>
+        </div>
+        <div class="scroll" style="border-top:1px solid var(--line)">
+        <table>${theadHTML(false)}<tbody>${lineRowsHTML(r.lines,false)}</tbody></table></div>`:""}
+    </div>`;
+  }).join("");
+}
+const renderAllRecs = () => { renderRecs("ingreso"); renderRecs("despacho"); };
+
+/* ===================== control ===================== */
+const inRange = fecha => {
+  const f=$("#rFrom").value, t=$("#rTo").value;
+  return !(f && (fecha||"")<f) && !(t && (fecha||"")>t);
+};
+const filteredRecords = () => records.filter(r => inRange(r.fecha));
+const filteredEntries = () => insEntries.filter(en => inRange(en.fecha));
+function renderControl(){
+  const fr = filteredRecords();
+  const ing = fr.filter(r=>r.tipo==="ingreso"), des = fr.filter(r=>r.tipo==="despacho");
+  $("#stats-ing").innerHTML = statsHTML(sumRec(ing.flatMap(r=>r.lines)), false);
+  $("#stats-des").innerHTML = statsHTML(sumRec(des.flatMap(r=>r.lines)), true);
+  const ti = sumEntries(filteredEntries());
+  $("#stats-ins").innerHTML = catalog.length
+    ? catalog.map(c=>`<div class="stat ins"><label>${esc(c.nombre)}</label>
+        <b>${f1(ti[c.id])}<small>${esc(c.unidad)}</small></b></div>`).join("")
+    : `<div class="stat ins"><label>Catálogo vacío</label><b>—</b></div>`;
+  const rows = [...fr].sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")).map(r=>{
+    const s=sumRec(r.lines);
+    const pre = r.tipo==="ingreso" ? "PL" : "GD";
+    return `<tr>
+      <td class="mono">${esc(r.fecha)}</td>
+      <td>${r.tipo==="ingreso"?'<span class="tag">Ingreso</span>':'<span class="pill ref" style="font-weight:600">Despacho</span>'}</td>
+      <td class="mono" style="font-weight:600">${pre} ${esc(r.doc)}</td>
+      <td class="muted" style="font-size:12px">${esc(r.ref||"")}</td>
+      <td class="r mono">${fNum(s.piezas)}</td><td class="r mono">${fNum(s.peso)}</td>
+      <td class="r mono">${fNum(s.cajas)}</td><td class="r mono">${s.pallets}</td>
+      <td class="r mono" style="font-weight:600">${fVol(s.volTotal)}</td>
+      <td class="r mono">${fVol(s.volPallets)}</td></tr>`;
+  }).join("");
+  $("#controlTable").innerHTML = `<thead><tr>
+    <th>Fecha</th><th>Tipo</th><th>Documento</th><th>Doc. rel.</th><th class="r">Piezas</th><th class="r">Peso (kg)</th>
+    <th class="r">Cajas</th><th class="r">Pallets</th><th class="r">Vol carga (m³)</th><th class="r">Vol pallets (m³)</th>
+    </tr></thead><tbody>${rows || `<tr><td colspan="10" style="text-align:center;padding:24px" class="muted">No hay documentos en el rango seleccionado.</td></tr>`}</tbody>`;
+}
+
+/* ===================== acciones ===================== */
+function handleFiles(files, tipo){
+  [...files].forEach(f=>{
+    const rd = new FileReader();
+    rd.onload = e => {
+      try{
+        const wb = XLSX.read(new Uint8Array(e.target.result), {type:"array"});
+        const docs = parseWorkbook(wb, f.name, tipo);
+        if(!docs.length){ toast(`${f.name}: no se encontraron líneas de producto`, true); return; }
+        drafts.push(...docs);
+        renderAllDrafts();
+        if(docs.length>1) toast(`${f.name}: se detectaron ${docs.length} documentos, se creó un borrador por cada uno`);
+      }catch(err){ toast(`${f.name}: no se pudo leer el archivo`, true); }
+    };
+    rd.readAsArrayBuffer(f);
+  });
+}
+function saveDraft(di){
+  const d = drafts[di];
+  if(!d.doc.trim()){ toast(d.tipo==="despacho"?"Digita el N° de GD antes de guardar":"Digita el N° de documento antes de guardar", true); return; }
+  records.push({ id:uid(), tipo:d.tipo, doc:d.doc.trim(), ref:(d.ref||"").trim(), fecha:d.fecha,
+    fileName:d.fileName, lines:d.lines, savedAt:new Date().toISOString() });
+  persist();
+  drafts.splice(di,1);
+  renderAllDrafts(); renderAllRecs();
+  if(d.tipo==="despacho"){
+    insEntries.push({ id:uid(), fecha:d.fecha, gd:d.doc.trim(), values:{} });
+    persistReg(); renderInsumos();
+    toast(`Despacho GD ${d.doc} guardado — se creó su fila en Insumos para completar`);
+  } else {
+    toast(`Ingreso PL ${d.doc} guardado`);
+  }
+}
+function exportXlsx(){
+  const fr = filteredRecords();
+  const fe = filteredEntries();
+  if(!fr.length && !fe.length){ toast("No hay registros en el rango elegido", true); return; }
+  const mk = tipo => fr.filter(r=>r.tipo===tipo).flatMap(r=>r.lines.map(l=>({
+    "Fecha":r.fecha, [tipo==="ingreso"?"Packing List":"GD"]:r.doc,
+    "Doc. asociado":r.ref||"",
+    "PO #":l.po,"Kit":l.kit,"Código":l.code,"Descripción":l.desc,
+    "QTY (PCS)":l.qty,"Peso Neto (KG)":l.peso,"Dim. Caja (cm)":l.cdims,"Cant. Cajas":l.cqty,
+    "Comparte caja":l.shared?"SÍ":"","Grupo caja":l.cartonGroup,
+    "Pallet #":l.palletId,"Cajón":l.cajon||null,"Dim. Pallet":l.palletDims,"Peso Pallet (KG)":l.palletPeso,
+    "Vol x Caja (m³)":l.volCaja,"Vol Total (m³)":l.volTotal,"Vol Pallet (m³)":l.volPallet||null })));
+  const wb = XLSX.utils.book_new();
+  const ingRows = mk("ingreso"), desRows = mk("despacho");
+  if(ingRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ingRows), "INGRESOS");
+  if(desRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(desRows), "SALIDAS");
+  const insRows = [...fe].sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")).map(en=>{
+    const row = { "Fecha":en.fecha,"GD":en.gd };
+    catalog.forEach(c=>{ row[`${c.nombre} (${c.unidad})`] = Number(en.values?.[c.id])||0; });
+    return row;
+  });
+  if(insRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(insRows), "INSUMOS");
+  const res = fr.map(r=>{ const s=sumRec(r.lines); return {
+    "Fecha":r.fecha,"Tipo":r.tipo==="ingreso"?"Ingreso":"Despacho",
+    "Documento":(r.tipo==="ingreso"?"PL ":"GD ")+r.doc,"Doc. relacionado":r.ref||"",
+    "Piezas (PCS)":s.piezas,"Peso (KG)":s.peso,"Cajas":s.cajas,"Pallets":s.pallets,
+    "Vol Total (m³)":+s.volTotal.toFixed(4),"Vol Pallets (m³)":+s.volPallets.toFixed(4) };});
+  if(res.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(res), "RESUMEN");
+  XLSX.writeFile(wb, `Control_Carga_Aletek_${today()}.xlsx`);
+}
+function backup(){
+  const blob = new Blob([JSON.stringify({records, catalog, insEntries},null,1)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `respaldo_control_aletek_${today()}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+}
+function restore(file){
+  const rd = new FileReader();
+  rd.onload = e => {
+    try{
+      const data = JSON.parse(e.target.result);
+      const recs = Array.isArray(data) ? data : data.records;
+      if(!Array.isArray(recs)) throw 0;
+      if(!Array.isArray(data)){
+        (data.catalog||[]).forEach(c=>{ if(c && c.id && !catalog.some(x=>x.id===c.id)) catalog.push(c); });
+        const eids = new Set(insEntries.map(x=>x.id));
+        (data.insEntries||[]).forEach(en=>{ if(en && en.id && !eids.has(en.id)) insEntries.push(en); });
+        persistCat(); persistReg(); renderCatalog(); renderInsumos();
+      }
+      const ids = new Set(records.map(r=>r.id));
+      let added = 0;
+      recs.forEach(r=>{ if(r && r.lines && !ids.has(r.id)){
+        const {insumos, ...rest} = r;
+        records.push({tipo:"ingreso", doc:r.plLabel||"", ref:"", ...rest}); added++; } });
+      persist(); renderAllRecs(); renderControl();
+      toast(`Respaldo restaurado: ${added} documento(s) agregado(s)`);
+    }catch(err){ toast("El archivo no es un respaldo válido", true); }
+  };
+  rd.readAsText(file);
+}
+
+/* ===================== eventos ===================== */
+$("#nav").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if(!b) return;
+  document.querySelectorAll("#nav button").forEach(x=>x.classList.toggle("active", x===b));
+  ["ingresos","despachos","insumos","control"].forEach(t=>{ $("#tab-"+t).hidden = t!==b.dataset.tab; });
+  if(b.dataset.tab==="control") renderControl();
+  if(b.dataset.tab==="insumos") renderInsumos();
+});
+const wireDrop = (dzId, inputId, tipo) => {
+  const dz = $(dzId);
+  dz.addEventListener("click", ()=> $(inputId).click());
+  dz.addEventListener("dragover", e=>{ e.preventDefault(); dz.classList.add("drag"); });
+  dz.addEventListener("dragleave", ()=> dz.classList.remove("drag"));
+  dz.addEventListener("drop", e=>{ e.preventDefault(); dz.classList.remove("drag"); handleFiles(e.dataTransfer.files, tipo); });
+  $(inputId).addEventListener("change", e=>{ handleFiles(e.target.files, tipo); e.target.value=""; });
+};
+wireDrop("#dz-ing","#file-ing","ingreso");
+wireDrop("#dz-des","#file-des","despacho");
+
+document.querySelectorAll("[data-manual]").forEach(b=>b.addEventListener("click", ()=>{
+  drafts.push({ tipo:b.dataset.manual, doc:"", ref:"", fecha:today(), fileName:"manual", lines:[], warnings:[] });
+  renderAllDrafts();
+}));
+
+["#drafts-ingreso","#drafts-despacho"].forEach(sel=>{
+  $(sel).addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b) return;
+    const di = +b.dataset.di;
+    if(b.dataset.act==="save") saveDraft(di);
+    else if(b.dataset.act==="discard"){ drafts.splice(di,1); renderAllDrafts(); }
+    else if(b.dataset.act==="addline"){
+      const d = drafts[di];
+      d.lines.push({ po:"", kit:"", code:"", desc:"", qty:null, peso:null, cdims:"", cqty:null,
+        shared:false, cartonGroup:(d.lines.at(-1)?.cartonGroup||0)+1, cajon:null,
+        volCaja:0, volTotal:0, palletId:null, palletDims:"", palletPeso:null, volPallet:0 });
+      renderAllDrafts();
+    }
+    else if(b.classList.contains("rowdel")){
+      drafts[di].lines.splice(+b.dataset.li,1); renderAllDrafts();
+    }
+  });
+  $(sel).addEventListener("change", e=>{
+    const inp = e.target; if(inp.dataset.di==null) return;
+    const d = drafts[+inp.dataset.di];
+    if(inp.dataset.f==="doc"){ d.doc = inp.value; renderAllDrafts(); return; }
+    if(inp.dataset.f==="ref"){ d.ref = inp.value; return; }
+    if(inp.dataset.f==="fecha"){ d.fecha = inp.value; return; }
+    const l = d.lines[+inp.dataset.li];
+    const f = inp.dataset.f;
+    if(f==="qty"||f==="peso") l[f] = inp.value===""?null:Number(inp.value);
+    else l[f] = inp.value;
+    if(f==="cdims"||f==="cqty") recalcLine(l);
+    renderAllDrafts();
+  });
+});
+
+["#recs-ingreso","#recs-despacho"].forEach(sel=>{
+  $(sel).addEventListener("change", e=>{
+    const inp = e.target;
+    if(inp.dataset.scope!=="recref") return;
+    const r = records.find(x=>x.id===inp.dataset.id); if(!r) return;
+    r.ref = inp.value.trim();
+    persist(); renderAllRecs();
+    if(!$("#tab-control").hidden) renderControl();
+    toast(`Doc. asociado de ${r.tipo==="ingreso"?"PL":"GD"} ${r.doc} actualizado`);
+  });
+  $(sel).addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b) return;
+    if(b.dataset.act==="toggle"){ expanded[b.dataset.id] = !expanded[b.dataset.id]; renderAllRecs(); }
+    if(b.dataset.act==="delrec"){
+      const r = records.find(x=>x.id===b.dataset.id);
+      const pre = r?.tipo==="ingreso" ? "PL" : "GD";
+      if(r && confirm(`¿Eliminar ${pre} ${r.doc}? Esta acción no se puede deshacer.`)){
+        records = records.filter(x=>x.id!==r.id); persist(); renderAllRecs(); renderControl();
+        toast(`${pre} ${r.doc} eliminado`);
+      }
+    }
+  });
+});
+
+/* ---------- fechas de corte: períodos de cierre ---------- */
+const LS_RANGE = "aletek-range-v1";
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+let rangeCfg = { cutDay:25, mode:"cierre", perY:null, perM:null, from:"", to:"" };
+try { Object.assign(rangeCfg, JSON.parse(localStorage.getItem(LS_RANGE) || "{}")); } catch(e){}
+const persistRange = () => { try{ localStorage.setItem(LS_RANGE, JSON.stringify(rangeCfg)); }catch(e){} };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const fmtCL = s => s ? s.split("-").reverse().join("-") : "";
+const lastDay = (y,m) => new Date(y, m+1, 0).getDate();
+/* período de cierre (y,m): desde cutDay+1 del mes anterior hasta cutDay del mes (y,m) */
+function cierreDates(y, m){
+  const cd = Math.min(Math.max(+rangeCfg.cutDay||25, 1), 28);
+  const pm = m===0 ? 11 : m-1, py = m===0 ? y-1 : y;
+  /* desde = día siguiente al corte del mes anterior (el Date de JS ajusta solo el cambio de mes) */
+  const from = new Date(py, pm, Math.min(cd, lastDay(py,pm)) + 1);
+  const to   = new Date(y, m, Math.min(cd, lastDay(y,m)));
+  return { from: iso(from), to: iso(to) };
+}
+function currentCierreYM(){
+  const now = new Date();
+  const cd = Math.min(Math.max(+rangeCfg.cutDay||25, 1), 28);
+  let y = now.getFullYear(), m = now.getMonth();
+  if(now.getDate() > cd){ m++; if(m>11){ m=0; y++; } }
+  return {y, m};
+}
+function applyRange(){
+  $("#rFrom").value = rangeCfg.from || "";
+  $("#rTo").value   = rangeCfg.to || "";
+  $("#cutDay").value = rangeCfg.cutDay;
+  let name = "Rango personalizado", dates = "";
+  if(rangeCfg.mode==="cierre" && rangeCfg.perY!=null){
+    name = `Cierre ${MESES[rangeCfg.perM]} ${rangeCfg.perY}`;
+  } else if(rangeCfg.mode==="mes"){ name = "Mes calendario";
+  } else if(rangeCfg.mode==="todo"){ name = "Todo el historial"; }
+  if(rangeCfg.from || rangeCfg.to)
+    dates = `${fmtCL(rangeCfg.from)||"…"} → ${fmtCL(rangeCfg.to)||"…"}`;
+  else dates = "sin filtro de fechas";
+  $("#perName").textContent = name;
+  $("#perDates").textContent = dates;
+  document.querySelectorAll("[data-preset]").forEach(b=>{
+    b.classList.toggle("on",
+      (b.dataset.preset==="cierre" && rangeCfg.mode==="cierre") ||
+      (b.dataset.preset==="todo"   && rangeCfg.mode==="todo"));
+  });
+  persistRange(); renderControl();
+}
+function setCierre(y, m){
+  const d = cierreDates(y, m);
+  Object.assign(rangeCfg, { mode:"cierre", perY:y, perM:m, from:d.from, to:d.to });
+  applyRange();
+}
+function stepCierre(dir){
+  if(rangeCfg.mode!=="cierre" || rangeCfg.perY==null){ const c = currentCierreYM(); setCierre(c.y, c.m); return; }
+  let y = rangeCfg.perY, m = rangeCfg.perM + dir;
+  if(m<0){ m=11; y--; } if(m>11){ m=0; y++; }
+  setCierre(y, m);
+}
+$("#perPrev").addEventListener("click", ()=> stepCierre(-1));
+$("#perNext").addEventListener("click", ()=> stepCierre(1));
+$("#cutDay").addEventListener("change", ()=>{
+  rangeCfg.cutDay = Math.min(Math.max(+$("#cutDay").value||25, 1), 28);
+  if(rangeCfg.mode==="cierre" && rangeCfg.perY!=null) setCierre(rangeCfg.perY, rangeCfg.perM);
+  else applyRange();
+});
+document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click", ()=>{
+  const p = b.dataset.preset;
+  const now = new Date();
+  if(p==="cierre"){ const c = currentCierreYM(); setCierre(c.y, c.m); return; }
+  if(p==="mes"){
+    Object.assign(rangeCfg, { mode:"mes", perY:null, perM:null,
+      from: iso(new Date(now.getFullYear(), now.getMonth(), 1)),
+      to:   iso(new Date(now.getFullYear(), now.getMonth(), lastDay(now.getFullYear(), now.getMonth()))) });
+  } else if(p==="mesant"){
+    const y = now.getMonth()===0 ? now.getFullYear()-1 : now.getFullYear();
+    const m = now.getMonth()===0 ? 11 : now.getMonth()-1;
+    Object.assign(rangeCfg, { mode:"mes", perY:null, perM:null,
+      from: iso(new Date(y, m, 1)), to: iso(new Date(y, m, lastDay(y, m))) });
+  } else if(p==="todo"){
+    Object.assign(rangeCfg, { mode:"todo", perY:null, perM:null, from:"", to:"" });
+  }
+  applyRange();
+}));
+$("#rFrom").addEventListener("change", ()=>{ Object.assign(rangeCfg,{mode:"custom",perY:null,perM:null,from:$("#rFrom").value}); applyRange(); });
+$("#rTo").addEventListener("change",   ()=>{ Object.assign(rangeCfg,{mode:"custom",perY:null,perM:null,to:$("#rTo").value}); applyRange(); });
+$("#btnExport").addEventListener("click", exportXlsx);
+$("#btnBackup").addEventListener("click", backup);
+$("#btnRestore").addEventListener("click", ()=> $("#restoreInput").click());
+$("#restoreInput").addEventListener("change", e=>{ if(e.target.files[0]) restore(e.target.files[0]); e.target.value=""; });
+
+renderCatalog();
+renderInsumos();
+renderAllDrafts();
+renderAllRecs();
+/* rango inicial: restaurar el último usado o partir en el cierre vigente */
+if(rangeCfg.mode==="cierre" && rangeCfg.perY!=null) setCierre(rangeCfg.perY, rangeCfg.perM);
+else if(localStorage.getItem(LS_RANGE)) applyRange();
+else { const c = currentCierreYM(); setCierre(c.y, c.m); }
+</script>
+</body>
+</html>
