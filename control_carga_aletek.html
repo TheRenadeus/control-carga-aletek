@@ -685,6 +685,10 @@ function handleFiles(files, tipo){
 function saveDraft(di){
   const d = drafts[di];
   if(!d.doc.trim()){ toast(d.tipo==="despacho"?"Digita el N° de GD antes de guardar":"Digita el N° de documento antes de guardar", true); return; }
+  /* el mismo PL/GD guardado dos veces se suma dos veces en Control de volumen */
+  const pre = d.tipo==="ingreso" ? "PL" : "GD";
+  const dup = records.find(r=>r.tipo===d.tipo && String(r.doc).trim().toLowerCase()===d.doc.trim().toLowerCase());
+  if(dup && !confirm(`${pre} ${dup.doc} ya está guardado (fecha ${dup.fecha}).\n¿Guardar de todas formas? Se sumará dos veces en Control de volumen.`)) return;
   records.push({ id:uid(), tipo:d.tipo, doc:d.doc.trim(), ref:(d.ref||"").trim(), fecha:d.fecha,
     fileName:d.fileName, lines:d.lines, savedAt:new Date().toISOString() });
   persist();
