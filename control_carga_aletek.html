@@ -329,7 +329,18 @@ function parseWorkbook(wb, fileName, tipo){
     docs.push(cur);
     curPO=""; curKit=""; cartonSeq=0; palletSeq=0; curPallet=null; curCajon=null;
   };
-  const findCol=(hdr,...keys)=>hdr.findIndex(c=>c&&keys.some(k=>String(c).toLowerCase().includes(k)));
+  // minúsculas y sin tildes: "Descripción" -> "descripcion", "Tamaño" -> "tamano"
+  const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const findCol=(hdr,...keys)=>hdr.findIndex(c=>c&&keys.some(k=>norm(c).includes(norm(k))));
+  // Para headers en español: prueba las keys en orden (la primera key que encuentra columna gana)
+  // y salta columnas ya asignadas a otro campo ("Producto" no es el código, "Cantidad de Kit" no es el kit).
+  const findColES=(hdr,taken,...keys)=>{
+    for(const k of keys){
+      const i = hdr.findIndex((c,j)=>c&&!taken.has(j)&&norm(c).includes(norm(k)));
+      if(i>=0){ taken.add(i); return i; }
+    }
+    return -1;
+  };
 
   for(const row of rows){
     if(!row || row.every(c=>c===null||c==="")) continue;
@@ -337,19 +348,39 @@ function parseWorkbook(wb, fileName, tipo){
 
     let m = first.match(/packing\s*list\s+(.+)/i);
     if(m){ newDoc(m[1].trim()); continue; }
+    m = first.match(/^pl[\s:#]+(.+)/i);
+    if(m){ newDoc(m[1].trim()); continue; }
     m = first.match(/^gd[\s:#]+(.+)/i);
     if(m){ newDoc(m[1].trim()); continue; }
 
-    const joined = row.map(c=>c?String(c).toLowerCase():"").join("|");
-    if(joined.includes("product") && joined.includes("description")){
+    const joined = norm(row.map(c=>c?String(c):"").join("|"));
+    const esHeaderEN = joined.includes("product") && joined.includes("description");
+    const esHeaderES = joined.includes("codigo") && (joined.includes("descripcion") || joined.includes("producto"));
+    if(esHeaderEN || esHeaderES){
       if(!cur) newDoc("");
-      colMap = {
-        po:findCol(row,"po"), kit:findCol(row,"kit"), code:findCol(row,"product"),
-        desc:findCol(row,"description"), qty:findCol(row,"qty (pcs","total qty"),
-        nw:findCol(row,"n.w"), cdims:findCol(row,"carton dim"), cqty:findCol(row,"carton qty"),
-        cajon:findCol(row,"cajon","cajón"),
-        pdims:findCol(row,"pallet dim"), pw:findCol(row,"pallet weight"),
-      };
+      if(esHeaderEN){
+        colMap = {
+          po:findCol(row,"po"), kit:findCol(row,"kit"), code:findCol(row,"product"),
+          desc:findCol(row,"description"), qty:findCol(row,"qty (pcs","total qty"),
+          nw:findCol(row,"n.w"), cdims:findCol(row,"carton dim"), cqty:findCol(row,"carton qty"),
+          cajon:findCol(row,"cajon","cajón"),
+          pdims:findCol(row,"pallet dim"), pw:findCol(row,"pallet weight"),
+        };
+      } else {
+        const t = new Set();
+        const code  = findColES(row,t,"codigo aletek","codigo articulo","codigo");
+        const desc  = findColES(row,t,"descripcion","description");
+        const cqty  = findColES(row,t,"total de cajas","cantidad de cajas","carton qty");
+        const qty   = findColES(row,t,"cantidad de kit","qty (pcs","total qty","cantidad");
+        const kit   = findColES(row,t,"producto","kit");
+        const nw    = findColES(row,t,"peso neto","n.w");
+        const cdims = findColES(row,t,"carton dim","dimensiones carton","dimensiones caja","caja dim");
+        const cajon = findColES(row,t,"cajon");
+        const pdims = findColES(row,t,"pallet tamano","pallet dim","tamano pallet","dimensiones pallet");
+        const pw    = findColES(row,t,"pallet peso","pallet weight","peso pallet");
+        const po    = findColES(row,t,"orden","pedido","po");
+        colMap = { po, kit, code, desc, qty, nw, cdims, cqty, cajon, pdims, pw };
+      }
       curPO=""; curKit=""; continue;
     }
     if(!colMap || !cur) continue;
