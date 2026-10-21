@@ -269,9 +269,13 @@ records.forEach(r=>{
   }
   delete r.insumos;
 });
-const persist    = () => { try{ localStorage.setItem(LS_KEY, JSON.stringify(records)); }catch(e){} };
-const persistCat = () => { try{ localStorage.setItem(LS_CAT, JSON.stringify(catalog)); }catch(e){} };
-const persistReg = () => { try{ localStorage.setItem(LS_REG, JSON.stringify(insEntries)); }catch(e){} };
+/* si el navegador no deja guardar (almacenamiento lleno o bloqueado) hay que avisar: si no, los datos
+   se ven en pantalla pero se pierden al recargar. setTimeout porque toast se define más abajo. */
+const persistFail = e => { console.error(e); setTimeout(()=>toast(
+  "⚠ No se pudo guardar en este navegador (almacenamiento lleno o bloqueado). Haz un Respaldo JSON ahora.", true, 12000)); };
+const persist    = () => { try{ localStorage.setItem(LS_KEY, JSON.stringify(records)); }catch(e){ persistFail(e); } };
+const persistCat = () => { try{ localStorage.setItem(LS_CAT, JSON.stringify(catalog)); }catch(e){ persistFail(e); } };
+const persistReg = () => { try{ localStorage.setItem(LS_REG, JSON.stringify(insEntries)); }catch(e){ persistFail(e); } };
 persist(); persistCat(); persistReg();
 
 /* ===================== utilidades ===================== */
@@ -287,7 +291,18 @@ const dimsVol = d => d ? d.l*d.a*d.h/1e6 : 0;
 const fVol = v => (v||v===0) ? Number(v).toFixed(4) : "";
 const fNum = v => (v||v===0) ? Number(v).toLocaleString("es-CL") : "";
 const f1 = v => (v||v===0) ? Number(v).toLocaleString("es-CL",{maximumFractionDigits:1}) : "0";
-const today = () => new Date().toISOString().slice(0,10);
+/* número digitado a mano: acepta coma decimal ("8,5") y miles con punto ("1.234,5").
+   "" -> null; texto que no es número -> undefined */
+const parseNum = v => {
+  let s = String(v ?? "").replace(/\s/g,"");
+  if(s==="") return null;
+  if(s.includes(",")) s = s.replace(/\./g,"").replace(",",".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
+};
+/* fecha local (no UTC): con toISOString, en Chile desde las ~21:00 salía el día siguiente */
+const today = () => { const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 const cleanKit = t => {
   if(!t) return "";
   const s = String(t).replace(/\s+/g," ").trim();
@@ -308,13 +323,13 @@ const sumEntries = entries => {
   return out;
 };
 let toastT;
-const toast = (msg, warn) => {
+const toast = (msg, warn, ms=3500) => {
   clearTimeout(toastT);
   const el = $("#toastEl");
   el.textContent = msg;
   el.style.background = warn ? "var(--warn)" : "var(--ok)";
   el.style.display = "block";
-  toastT = setTimeout(()=> el.style.display="none", 3500);
+  toastT = setTimeout(()=> el.style.display="none", ms);
 };
 
 /* ===================== parser: soporta varios documentos por Excel ===================== */
@@ -329,7 +344,18 @@ function parseWorkbook(wb, fileName, tipo){
     docs.push(cur);
     curPO=""; curKit=""; cartonSeq=0; palletSeq=0; curPallet=null; curCajon=null;
   };
-  const findCol=(hdr,...keys)=>hdr.findIndex(c=>c&&keys.some(k=>String(c).toLowerCase().includes(k)));
+  // minúsculas y sin tildes: "Descripción" -> "descripcion", "Tamaño" -> "tamano"
+  const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  const findCol=(hdr,...keys)=>hdr.findIndex(c=>c&&keys.some(k=>norm(c).includes(norm(k))));
+  // Para headers en español: prueba las keys en orden (la primera key que encuentra columna gana)
+  // y salta columnas ya asignadas a otro campo ("Producto" no es el código, "Cantidad de Kit" no es el kit).
+  const findColES=(hdr,taken,...keys)=>{
+    for(const k of keys){
+      const i = hdr.findIndex((c,j)=>c&&!taken.has(j)&&norm(c).includes(norm(k)));
+      if(i>=0){ taken.add(i); return i; }
+    }
+    return -1;
+  };
 
   for(const row of rows){
     if(!row || row.every(c=>c===null||c==="")) continue;
@@ -337,19 +363,39 @@ function parseWorkbook(wb, fileName, tipo){
 
     let m = first.match(/packing\s*list\s+(.+)/i);
     if(m){ newDoc(m[1].trim()); continue; }
+    m = first.match(/^pl[\s:#]+(.+)/i);
+    if(m){ newDoc(m[1].trim()); continue; }
     m = first.match(/^gd[\s:#]+(.+)/i);
     if(m){ newDoc(m[1].trim()); continue; }
 
-    const joined = row.map(c=>c?String(c).toLowerCase():"").join("|");
-    if(joined.includes("product") && joined.includes("description")){
+    const joined = norm(row.map(c=>c?String(c):"").join("|"));
+    const esHeaderEN = joined.includes("product") && joined.includes("description");
+    const esHeaderES = joined.includes("codigo") && (joined.includes("descripcion") || joined.includes("producto"));
+    if(esHeaderEN || esHeaderES){
       if(!cur) newDoc("");
-      colMap = {
-        po:findCol(row,"po"), kit:findCol(row,"kit"), code:findCol(row,"product"),
-        desc:findCol(row,"description"), qty:findCol(row,"qty (pcs","total qty"),
-        nw:findCol(row,"n.w"), cdims:findCol(row,"carton dim"), cqty:findCol(row,"carton qty"),
-        cajon:findCol(row,"cajon","cajón"),
-        pdims:findCol(row,"pallet dim"), pw:findCol(row,"pallet weight"),
-      };
+      if(esHeaderEN){
+        colMap = {
+          po:findCol(row,"po"), kit:findCol(row,"kit"), code:findCol(row,"product"),
+          desc:findCol(row,"description"), qty:findCol(row,"qty (pcs","total qty"),
+          nw:findCol(row,"n.w"), cdims:findCol(row,"carton dim"), cqty:findCol(row,"carton qty"),
+          cajon:findCol(row,"cajon","cajón"),
+          pdims:findCol(row,"pallet dim"), pw:findCol(row,"pallet weight"),
+        };
+      } else {
+        const t = new Set();
+        const code  = findColES(row,t,"codigo aletek","codigo articulo","codigo");
+        const desc  = findColES(row,t,"descripcion","description");
+        const cqty  = findColES(row,t,"total de cajas","cantidad de cajas","carton qty");
+        const qty   = findColES(row,t,"cantidad de kit","qty (pcs","total qty","cantidad");
+        const kit   = findColES(row,t,"producto","kit");
+        const nw    = findColES(row,t,"peso neto","n.w");
+        const cdims = findColES(row,t,"carton dim","dimensiones carton","dimensiones caja","caja dim");
+        const cajon = findColES(row,t,"cajon");
+        const pdims = findColES(row,t,"pallet tamano","pallet dim","tamano pallet","dimensiones pallet");
+        const pw    = findColES(row,t,"pallet peso","pallet weight","peso pallet");
+        const po    = findColES(row,t,"orden","pedido","po");
+        colMap = { po, kit, code, desc, qty, nw, cdims, cqty, cajon, pdims, pw };
+      }
       curPO=""; curKit=""; continue;
     }
     if(!colMap || !cur) continue;
@@ -648,6 +694,10 @@ function handleFiles(files, tipo){
 function saveDraft(di){
   const d = drafts[di];
   if(!d.doc.trim()){ toast(d.tipo==="despacho"?"Digita el N° de GD antes de guardar":"Digita el N° de documento antes de guardar", true); return; }
+  /* el mismo PL/GD guardado dos veces se suma dos veces en Control de volumen */
+  const pre = d.tipo==="ingreso" ? "PL" : "GD";
+  const dup = records.find(r=>r.tipo===d.tipo && String(r.doc).trim().toLowerCase()===d.doc.trim().toLowerCase());
+  if(dup && !confirm(`${pre} ${dup.doc} ya está guardado (fecha ${dup.fecha}).\n¿Guardar de todas formas? Se sumará dos veces en Control de volumen.`)) return;
   records.push({ id:uid(), tipo:d.tipo, doc:d.doc.trim(), ref:(d.ref||"").trim(), fecha:d.fecha,
     fileName:d.fileName, lines:d.lines, savedAt:new Date().toISOString() });
   persist();
@@ -772,7 +822,11 @@ document.querySelectorAll("[data-manual]").forEach(b=>b.addEventListener("click"
     if(inp.dataset.f==="fecha"){ d.fecha = inp.value; return; }
     const l = d.lines[+inp.dataset.li];
     const f = inp.dataset.f;
-    if(f==="qty"||f==="peso") l[f] = inp.value===""?null:Number(inp.value);
+    if(f==="qty"||f==="peso"||f==="cqty"){
+      const n = parseNum(inp.value);
+      if(n===undefined){ toast(`"${inp.value}" no es un número válido`, true); renderAllDrafts(); return; }
+      l[f] = n;
+    }
     else l[f] = inp.value;
     if(f==="cdims"||f==="cqty") recalcLine(l);
     renderAllDrafts();
